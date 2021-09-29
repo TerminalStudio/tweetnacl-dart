@@ -1,4 +1,8 @@
-A library for Dart developers.
+A fork of tweetnacl-dart with up-to-date dependencies and automated tests.
+
+- `fixnum: ^1.0.0`
+- `convert: ^3.0.0`
+- [![test](https://github.com/TerminalStudio/tweetnacl-dart/actions/workflows/dart.yml/badge.svg)](https://github.com/TerminalStudio/tweetnacl-dart/actions/workflows/dart.yml)
 
 ## Usage
 

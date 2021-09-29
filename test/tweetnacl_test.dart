@@ -1,4 +1,5 @@
-import 'package:tweetnacl/tweetnacl.dart';
+import 'package:test/test.dart';
+import 'package:tweetnacl2/tweetnacl2.dart';
 import 'dart:typed_data';
 import "dart:convert";
 
@@ -46,407 +47,386 @@ final String SIGN_PUBLIC =
     "77f48b59caeda77751ed138b0ec667ff50f8768c25d48309a8f386a2bad187fb";
 
 void testHash() {
-  String m0 = "Helloword, Am Tom ...";
-  List<int> b0 = utf8.encode(m0);
+  final m0 = "Helloword, Am Tom ...";
+  final b0 = utf8.encode(m0);
+  final h0 =
+      '7DB1C7083D2EF545D4D12B1A919C4E501F94F4C106EE5CF65C75093CFB39C421E39F2401EA9B1F0BCEBC792DF9019307B941524EE899A6EA1839BD1B306D5D2E';
 
-  print("\nsha512...@${DateTime.now().millisecondsSinceEpoch}");
-  Uint8List hash = Hash.sha512(b0);
-  print("...sha512@${DateTime.now().millisecondsSinceEpoch}");
-
-  String hst = "sha512@$m0/${b0.length}: ";
-  for (int i = 0; i < hash.length; i++) hst += " ${hash[i]}";
-  print(hst);
+  test('hash', () {
+    print("\nsha512...@${DateTime.now().millisecondsSinceEpoch}");
+    final hash = Hash.sha512(b0);
+    print("...sha512@${DateTime.now().millisecondsSinceEpoch}");
+    print("sha512@$m0/${b0.length}: $hash");
+    expect(TweetNaclFast.hexEncodeToString(hash), h0);
+  });
 }
 
 void testBoxKalium() {
-  print("testBoxKalium: test vectors from Kalium project");
+  test('testBoxKalium: test vectors from Kalium project', () {
+    // explicit nonce
+    final theNonce = TweetNaclFast.hexDecode(BOX_NONCE);
+    print("BOX_NONCE: \"${TweetNaclFast.hexEncodeToString(theNonce)}\"");
 
-// explicit nonce
-  List<int> theNonce = TweetNaclFast.hexDecode(BOX_NONCE);
-  print("BOX_NONCE: \"${TweetNaclFast.hexEncodeToString(theNonce)}\"");
+    // keypair A
+    final ska = TweetNaclFast.hexDecode(ALICE_PRIVATE_KEY);
+    final ka = Box.keyPair_fromSecretKey(ska);
 
-// keypair A
-  List<int> ska = TweetNaclFast.hexDecode(ALICE_PRIVATE_KEY);
-  KeyPair ka = Box.keyPair_fromSecretKey(ska);
+    print("ska: \"${TweetNaclFast.hexEncodeToString(ka.secretKey)}\"");
+    print("pka: \"${TweetNaclFast.hexEncodeToString(ka.publicKey)}\"");
 
-  print("ska: \"${TweetNaclFast.hexEncodeToString(ka.secretKey)}\"");
-  print("pka: \"${TweetNaclFast.hexEncodeToString(ka.publicKey)}\"");
+    // keypair B
+    final skb = TweetNaclFast.hexDecode(BOB_PRIVATE_KEY);
+    final kb = Box.keyPair_fromSecretKey(skb);
 
-// keypair B
-  List<int> skb = TweetNaclFast.hexDecode(BOB_PRIVATE_KEY);
-  KeyPair kb = Box.keyPair_fromSecretKey(skb);
+    print("ska: \"${TweetNaclFast.hexEncodeToString(kb.secretKey)}\"");
+    print("pka: \"${TweetNaclFast.hexEncodeToString(kb.publicKey)}\"");
 
-  print("ska: \"${TweetNaclFast.hexEncodeToString(kb.secretKey)}\"");
-  print("pka: \"${TweetNaclFast.hexEncodeToString(kb.publicKey)}\"");
+    // peer A -> B
+    final pabFast = new Box(kb.publicKey, ka.secretKey);
 
-// peer A -> B
-  Box pabFast = new Box(kb.publicKey, ka.secretKey);
+    // peer B -> A
+    final pbaFast = new Box(ka.publicKey, kb.secretKey);
 
-// peer B -> A
-  Box pbaFast = new Box(ka.publicKey, kb.secretKey);
+    // messages
+    print("BOX_MESSAGE: \n" + BOX_MESSAGE.toUpperCase());
+    print("BOX_CIPHERTEXT: \n" + BOX_CIPHERTEXT.toUpperCase());
 
-// messages
-  print("BOX_MESSAGE: \n" + BOX_MESSAGE.toUpperCase());
-  print("BOX_CIPHERTEXT: \n" + BOX_CIPHERTEXT.toUpperCase());
+    // cipher A -> B
+    final cabFast =
+        pabFast.box_nonce(TweetNaclFast.hexDecode(BOX_MESSAGE), theNonce);
+    print("cabFast: \n" + TweetNaclFast.hexEncodeToString(cabFast));
 
-// cipher A -> B
-  Uint8List cabFast = pabFast.box_nonce(TweetNaclFast.hexDecode(BOX_MESSAGE), theNonce);
-  print("cabFast: \n" + TweetNaclFast.hexEncodeToString(cabFast));
+    //!!! TweetNaclFast Box::box/open failed Kalium compatibility !!!
+    expect(
+      BOX_CIPHERTEXT.toUpperCase(),
+      TweetNaclFast.hexEncodeToString(cabFast),
+    );
 
-//!!! TweetNaclFast Box::box/open failed Kalium compatibility !!!
-  assert(BOX_CIPHERTEXT.toUpperCase() == TweetNaclFast.hexEncodeToString(cabFast));
+    final mbaFastFast = pbaFast.open_nonce(cabFast, theNonce);
+    print("mbaFastFast: \n" + TweetNaclFast.hexEncodeToString(mbaFastFast));
 
-  Uint8List mbaFastFast = pbaFast.open_nonce(cabFast, theNonce);
-  print("mbaFastFast: \n" + TweetNaclFast.hexEncodeToString(mbaFastFast));
-
-//!!! TweetNaclFast Box::box/open failed Kalium compatibility !!!
-  assert(BOX_MESSAGE.toUpperCase() == TweetNaclFast.hexEncodeToString(mbaFastFast));
+    //!!! TweetNaclFast Box::box/open failed Kalium compatibility !!!
+    expect(
+      BOX_MESSAGE.toUpperCase(),
+      TweetNaclFast.hexEncodeToString(mbaFastFast),
+    );
+  });
 }
 
-
 void testBox() {
-// keypair A
-  Uint8List ska = Uint8List(32);
-  for (int i = 0; i < 32; i ++) ska[i] = 0;
-  KeyPair ka = Box.keyPair_fromSecretKey(ska);
+  test('box', () {
+    // keypair A
+    final ska = Uint8List(32);
+    for (var i = 0; i < 32; i++) ska[i] = 0;
+    final ka = Box.keyPair_fromSecretKey(ska);
 
-  String skat = "";
-  for (int i = 0; i < ka.secretKey.length; i ++)
-    skat += " ${ka.secretKey[i]}";
-  print("skat: "+skat);
+    print("skat: ${ka.secretKey}");
+    print("pkat: ${ka.publicKey}");
 
+    // keypair B
+    final skb = Uint8List(32);
+    for (var i = 0; i < 32; i++) skb[i] = 1;
+    final kb = Box.keyPair_fromSecretKey(skb);
 
-  String pkat = "";
-  for (int i = 0; i < ka.publicKey.length; i ++)
-    pkat += " ${ka.publicKey[i]}";
-  print("pkat: "+pkat);
+    print("skbt: ${kb.secretKey}");
+    print("pkbt: ${kb.publicKey}");
 
-// keypair B
-  Uint8List skb = Uint8List(32);
-  for (int i = 0; i < 32; i ++) skb[i] = 1;
-  KeyPair kb = Box.keyPair_fromSecretKey(skb);
+    // peer A -> B
+    final pab = new Box.nonce(kb.publicKey, ka.secretKey, 0);
 
+    // peer B -> A
+    final pba = new Box.nonce(ka.publicKey, kb.secretKey, 0);
 
-  String skbt = "";
-  for (int i = 0; i < kb.secretKey.length; i ++)
-    skbt += " ${kb.secretKey[i]}";
-  print("skbt: "+skbt);
+    // messages
+    final m0 = "Helloword, Am Tom ...";
 
-  String pkbt = "";
-  for (int i = 0; i < kb.publicKey.length; i ++)
-    pkbt += " ${kb.publicKey[i]}";
-  print("pkbt: "+pkbt);
+    // cipher A -> B
+    final cab = pab.box(utf8.encode(m0));
+    print("cabt: $cab");
 
-// peer A -> B
-  Box pab = new Box.nonce(kb.publicKey, ka.secretKey, 0);
+    final mba = pba.open(Uint8List.fromList(cab));
+    print("mbat: $mba");
 
-// peer B -> A
-  Box pba = new Box.nonce(ka.publicKey, kb.secretKey, 0);
+    final nm0 = utf8.decode(mba);
+    //box/open string failed
+    expect(nm0, m0);
 
-// messages
-  String m0 = "Helloword, Am Tom ...";
+    // cipher B -> A
+    // final b0 = Uint8List(100 * 1000000);
+    // for (var i = 0; i < b0.length; i++) b0[i] = i;
 
-// cipher A -> B
-  List<int> cab = pab.box(utf8.encode(m0));
-  String cabt = "";
-  for (int i = 0; i < cab.length; i ++)
-    cabt += " ${cab[i]}";
-  print("cabt: "+cabt);
-
-  Uint8List mba = pba.open(Uint8List.fromList(cab));
-  String mbat = "";
-  for (int i = 0; i < mba.length; i ++)
-    mbat += " ${mba[i]}";
-  print("mbat: "+mbat);
-
-  String nm0 = utf8.decode(mba);
-//box/open string failed
-  assert(nm0 == m0);
-
-// cipher B -> A
-  Uint8List b0 =Uint8List(100*1000000);
-  for (int i = 0; i < b0.length; i ++)
-    b0[i] = i;
-
-//print("big of 100M  box@${DateTime.now().millisecondsSinceEpoch}");
-//Uint8List cba = pba.box(b0);
-//Uint8List mab = pab.open(cba);
-//print("big of 100M open@${DateTime.now().millisecondsSinceEpoch}");
-////big of 100M box/open binary failed
-//assert( b0 == mab);
-
+    //print("big of 100M  box@${DateTime.now().millisecondsSinceEpoch}");
+    //Uint8List cba = pba.box(b0);
+    //Uint8List mab = pab.open(cba);
+    //print("big of 100M open@${DateTime.now().millisecondsSinceEpoch}");
+    ////big of 100M box/open binary failed
+    //assert( b0 == mab);
+  });
 }
 
 void testBoxNonce() {
+  test('box nonce', () {
+    // explicit nonce
+    final theNonce = TweetNaclFast.makeBoxNonce();
+    // final theNonce3 =
+    //     TweetNaclFast.hexDecode(TweetNaclFast.hexEncodeToString(theNonce));
+    //  print("BoxNonce Hex test Equal: " + "\"" + (theNonce == theNonce3) + "\"");
+    print('BoxNonce: ${theNonce}');
+    print('BoxNonce: ${TweetNaclFast.hexEncodeToString(theNonce)}');
 
-  // explicit nonce
-  Uint8List theNonce = TweetNaclFast.makeBoxNonce();
-  Uint8List theNonce3 = TweetNaclFast.hexDecode(TweetNaclFast.hexEncodeToString(theNonce));
-//  print("BoxNonce Hex test Equal: " + "\"" + (theNonce == theNonce3) + "\"");
-  String theNoncet = "";
-  for (int i = 0; i < theNonce.length; i ++)
-    theNoncet += " ${theNonce[i]}";
-  print("BoxNonce: "+theNoncet);
-  print("BoxNonce: " + "\"" + TweetNaclFast.hexEncodeToString(theNonce) + "\"");
+    // keypair A
+    final ska = Uint8List(32);
+    for (var i = 0; i < 32; i++) ska[i] = 0;
+    final ka = Box.keyPair_fromSecretKey(ska);
 
+    print("skat: ${ka.secretKey}");
+    print("pkat: ${ka.publicKey}");
 
+    // keypair B
+    final skb = Uint8List(32);
+    for (var i = 0; i < 32; i++) skb[i] = 1;
+    final kb = Box.keyPair_fromSecretKey(skb);
 
-  // keypair A
-  Uint8List ska = Uint8List(32);
-  for (int i = 0; i < 32; i ++) ska[i] = 0;
-  KeyPair ka = Box.keyPair_fromSecretKey(ska);
+    print("skbt: ${kb.secretKey}");
+    print("pkbt: ${kb.publicKey}");
 
-  String skat = "";
-  for (int i = 0; i < ka.secretKey.length; i ++)
-    skat += " ${ka.secretKey[i]}";
-  print("skat: "+skat);
+    // peer A -> B
+    final pab = Box(kb.publicKey, ka.secretKey);
 
-  String pkat = "";
-  for (int i = 0; i < ka.publicKey.length; i ++)
-    pkat += " ${ka.publicKey[i]}";
-  print("pkat: "+pkat);
+    // peer B -> A
+    final pba = Box(ka.publicKey, kb.secretKey);
 
-  // keypair B
-  Uint8List skb = Uint8List(32);
-  for (int i = 0; i < 32; i ++) skb[i] = 1;
-  KeyPair kb = Box.keyPair_fromSecretKey(skb);
+    // messages
+    final m0 = "Helloword, Am Tom ...";
 
-  String skbt = "";
-  for (int i = 0; i < kb.secretKey.length; i ++)
-    skbt += " ${kb.secretKey[i]}";
-  print("skbt: "+skbt);
+    // cipher A -> B
+    final cab = pab.box_nonce(utf8.encode(m0), theNonce);
+    print("cabt: $cab");
 
-  String pkbt = "";
-  for (int i = 0; i < kb.publicKey.length; i ++)
-    pkbt += " ${kb.publicKey[i]}";
-  print("pkbt: "+pkbt);
+    final mba = pba.open_nonce(Uint8List.fromList(cab), theNonce);
+    print("mbat: $mba");
 
-  // peer A -> B
-  Box pab = Box(kb.publicKey, ka.secretKey);
+    final nm0 = utf8.decode(mba);
+    //box/open string failed (with nonce)
+    expect(nm0, m0);
 
-  // peer B -> A
-  Box pba = Box(ka.publicKey, kb.secretKey);
+    // cipher B -> A
+    final b0 = Uint8List(6);
 
-  // messages
-  String m0 = "Helloword, Am Tom ...";
-
-// cipher A -> B
-  List<int> cab = pab.box_nonce(utf8.encode(m0), theNonce);
-  String cabt = "";
-  for (int i = 0; i < cab.length; i ++)
-    cabt += " ${cab[i]}";
-  print("cabt: "+cabt);
-
-  Uint8List mba = pba.open_nonce(Uint8List.fromList(cab), theNonce);
-  String mbat = "";
-  for (int i = 0; i < mba.length; i ++)
-    mbat += " ${mba[i]}";
-  print("mbat: "+mbat);
-
-  String nm0 = utf8.decode(mba);
-//box/open string failed (with nonce)
-  assert(nm0 == m0);
-
-  // cipher B -> A
-  Uint8List b0 = Uint8List(6);
-
-  print("box@${DateTime.now().millisecondsSinceEpoch}");
-  Uint8List cba = pba.box_nonce(b0, theNonce);
-  Uint8List mab = pab.open_nonce(cba, theNonce);
-  print("open@${DateTime.now().millisecondsSinceEpoch}");
-//
-//  assertArrayEquals("box/open binary failed (with nonce)", b0, mab);
+    print("box@${DateTime.now().millisecondsSinceEpoch}");
+    final cba = pba.box_nonce(b0, theNonce);
+    final mab = pab.open_nonce(cba, theNonce);
+    print("open@${DateTime.now().millisecondsSinceEpoch}");
+    //
+    //  assertArrayEquals("box/open binary failed (with nonce)", b0, mab);
+    expect(b0, equals(mab));
+  });
 }
 
 void testSecretBox() {
-  // shared key
-  Uint8List shk = Uint8List(SecretBox.keyLength);
-  for (int i = 0; i < shk.length; i ++)
-    shk[i] = 0x66;
+  test('secret box', () {
+    // shared key
+    final shk = Uint8List(SecretBox.keyLength);
+    for (var i = 0; i < shk.length; i++) shk[i] = 0x66;
 
-  // peer A -> B
-  SecretBox pab = SecretBox.nonce(shk, 0);
+    // peer A -> B
+    final pab = SecretBox.nonce(shk, 0);
 
-  // peer B -> A
-  SecretBox pba = SecretBox.nonce(shk, 0);
+    // peer B -> A
+    final pba = SecretBox.nonce(shk, 0);
 
-  // messages
-  String m0 = "Helloword, Am Tom ...";
+    // messages
+    var m0 = "Helloword, Am Tom ...";
 
-  // cipher A -> B
-  print("streess on secret box@$m0");
+    // cipher A -> B
+    print("streess on secret box@$m0");
 
-  for (int t = 0; t < 19; t ++, m0 += m0) {
-    List<int> mb0 = utf8.encode(m0);
+    for (int t = 0; t < 19; t++, m0 += m0) {
+      final mb0 = utf8.encode(m0);
 
-    print("\n\n\tstreess/${(mb0.length/1000.0)}kB: $t times");
+      print("\n\n\tstreess/${(mb0.length / 1000.0)}kB: $t times");
 
-    /*String mb0t = "mb0/"+mb0.length + ": ";
-			for (int i = 0; i < mb0.length; i ++)
+      /*String mb0t = "mb0/"+mb0.length + ": ";
+			for (var i = 0; i < mb0.length; i ++)
 				mb0t += " "+mb0[i];
 			System.out.println(mb0t);
-*/
-    print("secret box ...@${DateTime.now().millisecondsSinceEpoch}");
-    Uint8List cab = pab.box(mb0);
-    print("... secret box@${DateTime.now().millisecondsSinceEpoch}");
+      */
+      print("secret box ...@${DateTime.now().millisecondsSinceEpoch}");
+      final cab = pab.box(mb0);
+      print("... secret box@${DateTime.now().millisecondsSinceEpoch}");
 
-    /*String cabt = "cab/"+cab.length + ": ";
-			for (int i = 0; i < cab.length; i ++)
+      /*String cabt = "cab/"+cab.length + ": ";
+			for (var i = 0; i < cab.length; i ++)
 				cabt += " "+cab[i];
 			System.out.println(cabt);
-*/
-    print("\nsecret box open ...@${DateTime.now().millisecondsSinceEpoch}");
-    Uint8List mba = pba.open(cab);
-    print("... secret box open@${DateTime.now().millisecondsSinceEpoch}");
+        */
+      print("\nsecret box open ...@${DateTime.now().millisecondsSinceEpoch}");
+      final mba = pba.open(cab);
+      print("... secret box open@${DateTime.now().millisecondsSinceEpoch}");
 
-    /*
+      /*
 			String mbat = "mba/"+mba.length + ": ";
-			for (int i = 0; i < mba.length; i ++)
+			for (var i = 0; i < mba.length; i ++)
 				mbat += " "+mba[i];
 			System.out.println(mbat);
-*/
+      */
 
-    String nm0 = utf8.decode(mba);
-    //secret box/open failed
-    assert(nm0 == m0);
-  }
+      final nm0 = utf8.decode(mba);
+      //secret box/open failed
+      expect(nm0, m0);
+    }
+  });
 }
 
 void testSecretBoxNonce() {
+  test('secret box nonce', () {
+    // explicit nonce
+    final theNonce = TweetNaclFast.makeSecretBoxNonce();
+    print("SecretBoxNonce :$theNonce");
 
-  // explicit nonce
-  Uint8List theNonce = TweetNaclFast.makeSecretBoxNonce();
-  String theNoncet = "";
-  for (int i = 0; i < theNonce.length; i ++)
-    theNoncet += " ${theNonce[i]}";
-  print("SecretBoxNonce: "+theNoncet);
+    // shared key
+    final shk = Uint8List(SecretBox.keyLength);
+    for (var i = 0; i < shk.length; i++) shk[i] = 0x66;
 
-  // shared key
-  Uint8List shk = Uint8List(SecretBox.keyLength);
-  for (int i = 0; i < shk.length; i ++)
-    shk[i] = 0x66;
+    // peer A -> B
+    final pab = SecretBox(shk);
 
-  // peer A -> B
-  SecretBox pab = SecretBox(shk);
+    // peer B -> A
+    final pba = SecretBox(shk);
 
-  // peer B -> A
-  SecretBox pba = SecretBox(shk);
+    // messages
+    var m0 = "Helloword, Am Tom ...";
 
-  // messages
-  String m0 = "Helloword, Am Tom ...";
+    // cipher A -> B
+    print("stress on secret box with explicit nonce@" + m0);
 
-  // cipher A -> B
-  print("stress on secret box with explicit nonce@"+m0);
+    for (int t = 0; t < 19; t++, m0 += m0) {
+      final mb0 = utf8.encode(m0);
 
-  for (int t = 0; t < 19; t ++, m0 += m0) {
-    List<int> mb0 = utf8.encode(m0);
+      print("\n\n\tstreess/${(mb0.length / 1000.0)}kB: $t times");
 
-    print("\n\n\tstreess/${(mb0.length/1000.0)}kB: $t times");
-
-    /*String mb0t = "mb0/"+mb0.length + ": ";
-			for (int i = 0; i < mb0.length; i ++)
+      /*String mb0t = "mb0/"+mb0.length + ": ";
+			for (var i = 0; i < mb0.length; i ++)
 				mb0t += " "+mb0[i];
 			System.out.println(mb0t);
-*/
-    print("secret box ...@${DateTime.now().millisecondsSinceEpoch}");
-    Uint8List cab = pab.box_nonce(mb0,theNonce);
-    print("... secret box@${DateTime.now().millisecondsSinceEpoch}");
+      */
+      print("secret box ...@${DateTime.now().millisecondsSinceEpoch}");
+      final cab = pab.box_nonce(mb0, theNonce);
+      print("... secret box@${DateTime.now().millisecondsSinceEpoch}");
 
-    /*String cabt = "cab/"+cab.length + ": ";
-			for (int i = 0; i < cab.length; i ++)
+      /*String cabt = "cab/"+cab.length + ": ";
+			for (var i = 0; i < cab.length; i ++)
 				cabt += " "+cab[i];
 			System.out.println(cabt);
-*/
-    print("\nsecret box open ...@${DateTime.now().millisecondsSinceEpoch}");
-    Uint8List mba = pba.open_nonce(cab,theNonce);
-    print("... secret box open@${DateTime.now().millisecondsSinceEpoch}");
+      */
+      print("\nsecret box open ...@${DateTime.now().millisecondsSinceEpoch}");
+      final mba = pba.open_nonce(cab, theNonce);
+      print("... secret box open@${DateTime.now().millisecondsSinceEpoch}");
 
-    /*
+      /*
 			String mbat = "mba/"+mba.length + ": ";
-			for (int i = 0; i < mba.length; i ++)
+			for (var i = 0; i < mba.length; i ++)
 				mbat += " "+mba[i];
 			System.out.println(mbat);
-*/
+      */
 
-    String nm0 = utf8.decode(mba);
-    //secret box/open failed
-    assert(nm0 == m0);
-  }
+      final nm0 = utf8.decode(mba);
+      //secret box/open failed
+      expect(nm0, m0);
+    }
+  });
 }
 
 void testSign() {
-  // keypair A
-  KeyPair ka = Signature.keyPair();
+  test('sign', () {
+    // keypair A
+    final ka = Signature.keyPair();
 
-  // keypair B
-  KeyPair kb = Signature.keyPair();
+    // keypair B
+    final kb = Signature.keyPair();
 
-  // peer A -> B
-  Signature pab = Signature(kb.publicKey, ka.secretKey);
+    // peer A -> B
+    final pab = Signature(kb.publicKey, ka.secretKey);
 
-  // peer B -> A
-  Signature pba = Signature(ka.publicKey, kb.secretKey);
+    // peer B -> A
+    final pba = Signature(ka.publicKey, kb.secretKey);
 
-  // messages
-  String m0 = "Helloword, Am Tom ...";
+    // messages
+    String m0 = "Helloword, Am Tom ...";
 
-  // signature A -> B
-  print("\nsign...@${DateTime.now().millisecondsSinceEpoch}");
-  Uint8List sab = pab.sign(utf8.encode(m0));
-  print("...sign@${DateTime.now().millisecondsSinceEpoch}");
+    // signature A -> B
+    print("\nsign...@${DateTime.now().millisecondsSinceEpoch}");
+    final sab = pab.sign(utf8.encode(m0));
+    print("...sign@${DateTime.now().millisecondsSinceEpoch}");
 
-  String sgt = "sign@"+m0 + ": ";
-  for (int i = 0; i < Signature.signatureLength; i ++)
-    sgt += " ${sab[i]}";
-  print(sgt);
+    var sgt = "sign@" + m0 + ": ";
+    for (var i = 0; i < Signature.signatureLength; i++) sgt += " ${sab[i]}";
+    print(sgt);
 
-  print("verify...@${DateTime.now().millisecondsSinceEpoch}");
-  Uint8List oba = pba.open(sab);
-  print("...verify@${DateTime.now().millisecondsSinceEpoch}");
+    print("verify...@${DateTime.now().millisecondsSinceEpoch}");
+    final oba = pba.open(sab);
+    print("...verify@${DateTime.now().millisecondsSinceEpoch}");
 
-  //"verify failed"
-  assert(oba != null);
-  String nm0 = utf8.decode(oba);
-  //"sign failed"
-  assert(nm0 == m0);
+    //"verify failed"
+    expect(oba, isNotNull);
+    var nm0 = utf8.decode(oba);
+    //"sign failed"
+    expect(nm0, m0);
 
-  // keypair C
-  Uint8List seed = Uint8List(Signature.seedLength);
-  for (int i = 0; i < seed.length; i ++) seed[i] = 0x66;
+    // keypair C
+    final seed = Uint8List(Signature.seedLength);
+    for (var i = 0; i < seed.length; i++) seed[i] = 0x66;
 
-  KeyPair kc = Signature.keyPair_fromSeed(seed);
+    final kc = Signature.keyPair_fromSeed(seed);
 
-  String skct = "";
-  for (int i = 0; i < kc.secretKey.length; i ++)
-    skct += " ${kc.secretKey[i]}";
-  print("skct: "+skct);
+    print("skct: ${kc.secretKey}");
+    print("pkct: ${kc.publicKey}");
 
-  String pkct = "";
-  for (int i = 0; i < kc.publicKey.length; i ++)
-    pkct += " ${kc.publicKey[i]}";
-  print("pkct: "+pkct);
+    // self-signed
+    final pcc = Signature(kc.publicKey, kc.secretKey);
 
-  // self-signed
-  Signature pcc = Signature(kc.publicKey, kc.secretKey);
+    print("\nself-sign...@${DateTime.now().millisecondsSinceEpoch}");
+    final scc = pcc.sign(utf8.encode(m0));
+    print("...self-sign@${DateTime.now().millisecondsSinceEpoch}");
 
-  print("\nself-sign...@${DateTime.now().millisecondsSinceEpoch}");
-  Uint8List scc = pcc.sign(utf8.encode(m0));
-  print("...self-sign@${DateTime.now().millisecondsSinceEpoch}");
+    var ssc = "self-sign@" + m0 + ": ";
+    for (var i = 0; i < Signature.signatureLength; i++) ssc += " ${scc[i]}";
+    print(ssc);
 
-  String ssc = "self-sign@"+m0 + ": ";
-  for (int i = 0; i < Signature.signatureLength; i ++)
-    ssc += " ${scc[i]}";
-  print(ssc);
+    print("self-verify...@${DateTime.now().millisecondsSinceEpoch}");
+    final occ = pcc.open(scc);
+    print("...self-verify@${DateTime.now().millisecondsSinceEpoch}");
 
-  print("self-verify...@${DateTime.now().millisecondsSinceEpoch}");
-  Uint8List occ = pcc.open(scc);
-  print("...self-verify@${DateTime.now().millisecondsSinceEpoch}");
+    //"self-verify failed"
+    expect(occ, isNotNull);
+    nm0 = utf8.decode(occ);
+    //"self-sign failed"
+    expect(nm0, m0);
+  });
+}
 
-  //"self-verify failed"
-  assert(occ != null);
-  nm0 = utf8.decode(occ);
-  //"self-sign failed"
-  assert (nm0 == m0);
+void testSignDetached(String seedStr) {
+  test('sign detached', () {
+    print("seed:@${DateTime.now().millisecondsSinceEpoch}");
+
+    final seed = TweetNaclFast.hexDecode(seedStr);
+    final kp = Signature.keyPair_fromSeed(seed);
+
+    final testString = "test string";
+    final bytes = utf8.encode(testString);
+
+    final s1 = Signature(null, kp.secretKey);
+    print("\ndetached...@${DateTime.now().millisecondsSinceEpoch}");
+    final signature = s1.detached(bytes);
+    print("...detached@${DateTime.now().millisecondsSinceEpoch}");
+
+    final s2 = Signature(kp.publicKey, null);
+    print("\nverify...@${DateTime.now().millisecondsSinceEpoch}");
+    final result = s2.detached_verify(bytes, signature);
+    print("...verify@${DateTime.now().millisecondsSinceEpoch}");
+
+    expect(result, isTrue);
+  });
 }
 
 void main() {
@@ -457,4 +437,10 @@ void main() {
   testSecretBox();
   testSecretBoxNonce();
   testSign();
+  testSignDetached(
+    "ac49000da11249ea3510941703a7e21a39837c4d2d5300daebbd532df20f8135",
+  );
+  testSignDetached(
+    "e56f0eef73ade8f79bc1d16a99cbc5e4995afd8c14adb49410ecd957aecc8d02",
+  );
 }
