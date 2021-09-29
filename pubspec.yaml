@@ -2,7 +2,7 @@ name: tweetnacl2
 version: 0.3.3
 
 description: A fork of tweetnacl-dart with up-to-date dependencies and automated tests.
-author: Jeff Lee <jspschool@gmail.com>
+# author: Jeff Lee <jspschool@gmail.com>
 homepage: https://github.com/jspschool/tweetnacl-dart
 
 environment:
